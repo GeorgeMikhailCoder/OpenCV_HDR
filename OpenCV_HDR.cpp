@@ -40,15 +40,40 @@ vector<Mat> laplasPyram(const Mat& src, int depth = 5)
 
 Mat mix(const Mat& src1, const Mat& src2, const Mat& mask)
 {
+	//Mat res(src1.rows,src1.cols,CV_32FC3);
 	Mat res(src1);
+	assert(src1.depth() == src2.depth() == mask.depth() == 0);
+	assert(src1.rows == src2.rows == mask.rows);
+	assert(src1.cols == src2.cols == mask.cols);
 
 	for (int y = 0; y < res.rows; y++)
 		for (int x = 0; x < res.cols; x++)
 		{
-			//res.at<src1.type>
+			const uchar u1 = src1.at<uchar>(y, x);
+			const uchar u2 = src2.at<uchar>(y, x);
+			const uchar m = mask.at<uchar>(y, x);
+			res.at<uchar>(y, x) = (uchar)((u1 * (255 - m) + u2 * m) / 255);
 		}
-	return Mat();
+	return res;
 }
+
+Mat laplasPyramInverse(const vector<Mat> pyram)
+{
+	int depth = (int)pyram.size() - 1;
+	Mat uk = pyram[depth];
+
+	Mat lk;
+	for (int i = depth - 1; i >= 0; i--)
+	{
+		lk = pyram[i];
+		pyrUp(uk,uk);
+		uk = lk + uk(Range(0,lk.rows),Range(0,lk.cols));
+	}
+
+	return uk;
+}
+
+
 
 int main()
 {
@@ -62,17 +87,18 @@ int main()
 	}
 	imshow("im", im);
 
-	vector<Mat> mass = laplasPyram(im, 4);
-	Mat im2;
-	im2 = mass[2];
-	int a = im.type();
-	im2.at<float>(0, 0);
-
+	vector<Mat> mass = laplasPyram(im, 200);
 
 	for (int i = 0; i < mass.size(); i++)
 		imshow(to_string(i), mass[i]);
-	imshow("im2", im2);
-	waitKey();
 
+
+	Mat src = laplasPyramInverse(mass);
+	imshow("src",src);
+
+
+	waitKey();
+	char c;
+	cin >> c;
 	return 0;
 }
