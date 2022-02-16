@@ -6,33 +6,43 @@
 using namespace std;
 using namespace cv;
 
-vector<Mat> gaussPyram(const Mat& src, int depth = 7)
+void printMinMax(Mat src)
+{
+	double minB, maxB;
+	minMaxLoc(src, &minB, &maxB);
+	cout << "min = " << minB << ", max = " << maxB << endl;
+}
+
+vector<Mat> gaussPyram(const Mat& src, int depth = -1)
 {
 	vector<Mat> res;
 	Mat buf(src);
-	for (int i = 0; i < depth && (buf.rows > 2 && buf.cols > 2); i++)
+	for (int i = 0; i < uint(depth-1) && (buf.rows > 2 && buf.cols > 2); i++)
 	{
 		res.push_back(buf);
 		pyrDown(buf, buf);
 	}
+	res.push_back(buf);
 	return res;
 }
 
-vector<Mat> laplasPyram(const Mat& src, int depth = 7)
+vector<Mat> laplasPyram(const Mat& src, int depth = -1)
 {
 	vector<Mat> res;
 
 	Mat buf_src(src);
 	Mat buf_low(src);
-	Mat buf_up(src);
-	Mat buf_laplas(src);
+	Mat buf_up;
+	Mat buf_laplas;
 
-	for (int i = 0; i < depth - 1 && (buf_src.rows > 2 && buf_src.cols > 2); i++)
+	for (int i = 0; i < uint(depth-1) && (buf_low.rows > 2 && buf_low.cols > 2); i++)
 	{
 		buf_src = buf_low;
 		pyrDown(buf_low, buf_low);
 		pyrUp(buf_low, buf_up, Size(buf_src.cols, buf_src.rows));
-		res.push_back(buf_src - buf_up);
+		buf_laplas = buf_src - buf_up;
+		printMinMax(buf_laplas);
+		res.push_back(buf_laplas);
 	}
 	res.push_back(buf_low);
 	return res;
@@ -40,7 +50,7 @@ vector<Mat> laplasPyram(const Mat& src, int depth = 7)
 
 Mat mix(const Mat& src1, const Mat& src2, const Mat& mask)
 {
-	//assert(src1.depth() == 0 && src2.depth() ==0  && mask.depth() == 0);
+	//  assert(src1.depth() == 0 && src2.depth() ==0  && mask.depth() == 0);
 	assert(src1.depth() == 5 && src2.depth() == 5 && mask.depth() == 5);
 	using curType = float;
 
@@ -63,17 +73,23 @@ Mat mix(const Mat& src1, const Mat& src2, const Mat& mask)
 
 	for (int ch = 0; ch < mask.channels(); ch++)
 	{
+		Mat src11 = planes1[ch];
+		Mat src22 = planes2[ch];
+		Mat mask1 = planesMask[ch];
+
 		Mat resChannel(mask.rows, mask.cols, mask.depth());
 		curType maxPixel = mask.depth() == 0 ? 255 : 1.0;
 
 		for (int y = 0; y < resChannel.rows; y++)
 			for (int x = 0; x < resChannel.cols; x++)
 			{
-				const curType u1 = src1.at<curType>(y, x);
-				const curType u2 = src2.at<curType>(y, x);
-				const curType m = mask.at<curType>(y, x);
-				resChannel.at<curType>(y, x) = (curType)((u1 * (maxPixel - m) + u2 * m) / maxPixel);
+				const curType u1 = src11.at<curType>(y, x);
+				const curType u2 = src22.at<curType>(y, x);
+				const curType m = mask1.at<curType>(y, x);
+				curType uk = (curType)((u1 * (maxPixel - m) + u2 * m) / maxPixel);
+				resChannel.at<curType>(y, x) = uk;
 			}
+
 		vec.push_back(resChannel);
 	}
 	Mat res;
@@ -81,52 +97,52 @@ Mat mix(const Mat& src1, const Mat& src2, const Mat& mask)
 	return res;
 }
 
-Mat laplasPyramInverse(const vector<Mat> pyram)
+vector<Mat>  laplasPyramInverse(const vector<Mat> pyram)
 {
 	int depth = (int)pyram.size() - 1;
 	Mat uk = pyram[depth];
 
 	Mat lk, tmp;
 	int i;
+	vector<Mat> res;
+	res.push_back(uk);
 	for (i = depth - 1; i >= 0; i--)
 	{
 		lk = pyram[i];
 		pyrUp(uk, uk, Size(lk.cols, lk.rows));
 		uk = lk + uk;
+		res.push_back(uk);
 	}
-
 	
-
-	return uk;
+	return res;
 }
 
 vector<Mat> mixPyram(const vector<Mat> mass1, const vector<Mat> mass2, const vector<Mat> mask)
 {
 	assert(mass1.size() == mass2.size() && mass2.size() == mask.size());
 	
-	vector<Mat> res(mass1.size());
-	for (int i = 0; i < mass1.size(); i++)
-		res[i] = mix(mass1[i], mass2[i], mask[i]);
+	vector<Mat> res;
+	for (int i = 0; i < mass1.size()-1; i++)
+		res.push_back(mix(mass1[i], mass2[i], mask[i]));
 	return res;
 }
 
 void printPyram(vector<Mat> mass)
 {
+	string id = to_string(rand() % 100) + "__";
 	for (int i = 0; i < mass.size(); i++)
-		imshow(to_string(i), mass[i]);
+		imshow(id + to_string(i), mass[i]);
 }
 
-Mat mixHDR(const Mat& im1, const Mat& im2, const Mat& mask)
+vector<Mat>  mixHDR(const Mat& im1, const Mat& im2, const Mat& mask)
 {
-	vector<Mat> maskMass = gaussPyram(mask, 100);
-	int dp = (int)maskMass.size();
+	vector<Mat> maskMass = gaussPyram(mask,5);
+	vector<Mat> mass1    = laplasPyram(im1,5);
+	vector<Mat> mass2    = laplasPyram(im2,5);
 	
-	vector<Mat> mass1 = laplasPyram(im1, dp);
-	vector<Mat> mass2 = laplasPyram(im2, dp);
-
 	vector<Mat> res = mixPyram(mass1, mass2, maskMass);
 
-	Mat dst = laplasPyramInverse(res);
+	vector<Mat>  dst = laplasPyramInverse(res);
 	return dst;
 }
 
@@ -152,7 +168,6 @@ Mat toFloat(const Mat& src)
 	res /= 255;
 	return res;
 }
-
 
 int main()
 {
@@ -191,18 +206,26 @@ int main()
 	im2 = toFloat(im22);
 	mask = toFloat(mask1);
 
+	imshow("test_laplas", laplasPyramInverse(laplasPyram(im1,5))[4]);
+
+	printMinMax(im1);
+	printMinMax(im2);
+	printMinMax(mask);
+
 	imshow("src1", im1);
-	//  imshow("src2", im2);
-	//  imshow("mask", mask);
+	imshow("src2", im2);
+	imshow("mask", mask);
 
-	// Mat dst = mixHDR(im1, im2, mask);
+	vector<Mat>  dst = mixHDR(im1, im2, mask);
+	
+	printMinMax(dst[dst.size() - 1]);
+	Mat res = dst[dst.size() - 1];
+	
+	double minB, maxB;
+	minMaxLoc(res, &minB, &maxB);
+	Mat res2 = Mat((res - minB) / (maxB - minB));
 
-	Mat dst = im1;
-	vector<Mat> tmp;
-	tmp = laplasPyram(dst);
-	printPyram(tmp);
-	dst = laplasPyramInverse(tmp);
-	imshow("res",dst);
+	imshow("res",res);
 
 	waitKey();
 	system("pause");
