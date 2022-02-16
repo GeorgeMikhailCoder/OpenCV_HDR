@@ -31,8 +31,8 @@ vector<Mat> laplasPyram(const Mat& src, int depth = 7)
 	{
 		buf_src = buf_low;
 		pyrDown(buf_low, buf_low);
-		pyrUp(buf_low, buf_up);
-		res.push_back(buf_src - buf_up(Range(0, buf_src.rows), Range(0, buf_src.cols)));
+		pyrUp(buf_low, buf_up, Size(buf_src.cols, buf_src.rows));
+		res.push_back(buf_src - buf_up);
 	}
 	res.push_back(buf_low);
 	return res;
@@ -86,14 +86,16 @@ Mat laplasPyramInverse(const vector<Mat> pyram)
 	int depth = (int)pyram.size() - 1;
 	Mat uk = pyram[depth];
 
-	Mat lk;
+	Mat lk, tmp;
 	int i;
 	for (i = depth - 1; i >= 0; i--)
 	{
 		lk = pyram[i];
-		pyrUp(uk,uk);
-		uk = lk + uk(Range(0,lk.rows),Range(0,lk.cols));
+		pyrUp(uk, uk, Size(lk.cols, lk.rows));
+		uk = lk + uk;
 	}
+
+	
 
 	return uk;
 }
@@ -181,19 +183,24 @@ int main()
 		exit(0);
 	}
 
-	Mat im1 = toFloat(im11);
-	Mat im2 = toFloat(im22);
-	Mat mask = toFloat(mask1);
+	Mat im1 = im11;
+	Mat im2 = im22;
+	Mat mask = mask1;
+
+	im1 = toFloat(im11);
+	im2 = toFloat(im22);
+	mask = toFloat(mask1);
 
 	imshow("src1", im1);
-	imshow("src2", im2);
-	imshow("mask", mask);
+	//  imshow("src2", im2);
+	//  imshow("mask", mask);
 
 	// Mat dst = mixHDR(im1, im2, mask);
 
 	Mat dst = im1;
 	vector<Mat> tmp;
 	tmp = laplasPyram(dst);
+	printPyram(tmp);
 	dst = laplasPyramInverse(tmp);
 	imshow("res",dst);
 
