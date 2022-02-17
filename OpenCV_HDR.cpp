@@ -136,9 +136,9 @@ void printPyram(vector<Mat> mass)
 
 vector<Mat>  mixHDR(const Mat& im1, const Mat& im2, const Mat& mask)
 {
-	vector<Mat> maskMass = gaussPyram(mask,5);
-	vector<Mat> mass1    = laplasPyram(im1,5);
-	vector<Mat> mass2    = laplasPyram(im2,5);
+	vector<Mat> maskMass = gaussPyram(mask,4);
+	vector<Mat> mass1    = laplasPyram(im1,4);
+	vector<Mat> mass2    = laplasPyram(im2,4);
 	
 	vector<Mat> res = mixPyram(mass1, mass2, maskMass);
 
@@ -167,6 +167,22 @@ Mat toFloat(const Mat& src)
 	src.convertTo(res, CV_32FC3);
 	res /= 255;
 	return res;
+}
+
+bool myCompareMat(const Mat& m1, const Mat& m2)
+{
+	Mat res;
+	absdiff(m1, m2, res);
+	//cout << res << endl;
+	double minEl, maxEl;
+	minMaxLoc(res, &minEl, &maxEl);
+	cout << "min = " << minEl << ", max = " << maxEl << endl;
+	return maxEl < 0.0001;
+}
+
+bool test_Pyram(Mat src)
+{
+	return myCompareMat(src, laplasPyramInverse(laplasPyram(src,5))[4]);
 }
 
 int main()
@@ -216,11 +232,13 @@ int main()
 	imshow("src2", im2);
 	imshow("mask", mask);
 
+	cout<<"test "<<test_Pyram(im1)<<endl;
+	
 	vector<Mat>  dst = mixHDR(im1, im2, mask);
 	
 	printMinMax(dst[dst.size() - 1]);
 	Mat res = dst[dst.size() - 1];
-	
+	printMinMax(res);
 	double minB, maxB;
 	minMaxLoc(res, &minB, &maxB);
 	Mat res2 = Mat((res - minB) / (maxB - minB));
