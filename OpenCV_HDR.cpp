@@ -86,7 +86,8 @@ Mat mix(const Mat& src1, const Mat& src2, const Mat& mask)
 				const curType u1 = src11.at<curType>(y, x);
 				const curType u2 = src22.at<curType>(y, x);
 				const curType m = mask1.at<curType>(y, x);
-				curType uk = (curType)((u1 * (maxPixel - m) + u2 * m) / maxPixel);
+				curType uk = (curType)((u1 * (maxPixel - m) + u2 * m) / (maxPixel));
+				uk = uk > maxPixel ? maxPixel : uk < 0 ? 0 : uk;
 				resChannel.at<curType>(y, x) = uk;
 			}
 
@@ -122,7 +123,7 @@ vector<Mat> mixPyram(const vector<Mat> mass1, const vector<Mat> mass2, const vec
 	assert(mass1.size() == mass2.size() && mass2.size() == mask.size());
 	
 	vector<Mat> res;
-	for (int i = 0; i < mass1.size()-1; i++)
+	for (int i = 0; i < mass1.size(); i++)
 		res.push_back(mix(mass1[i], mass2[i], mask[i]));
 	return res;
 }
@@ -185,6 +186,18 @@ bool test_Pyram(Mat src)
 	return myCompareMat(src, laplasPyramInverse(laplasPyram(src,5))[4]);
 }
 
+void preprocessSmith(Mat& im)
+{
+	vector<Mat> mass;
+	split(im, mass);
+
+	mass[1] = mass[2]/2;
+
+	merge(mass, im);
+}
+
+
+
 int main()
 {
 	Mat im11 = imread("../../../img/hulk1.jpg", IMREAD_COLOR);
@@ -197,6 +210,9 @@ int main()
 	}
 	
 	Mat im22 = imread("../../../img/smith1.jpg", IMREAD_COLOR);
+	//preprocessSmith(im22);
+
+
 	if (im22.empty())
 	{
 		cout << "Can't read image" << endl;
@@ -205,7 +221,7 @@ int main()
 		exit(0);
 	}
 
-	Mat mask1 = imread("../../../img/mask_sh1.jpg", IMREAD_COLOR);
+	Mat mask1 = imread("../../../img/mask_sh3.jpg", IMREAD_COLOR);
 	if (mask1.empty())
 	{
 		cout << "Can't read image" << endl;
@@ -222,7 +238,7 @@ int main()
 	im2 = toFloat(im22);
 	mask = toFloat(mask1);
 
-	imshow("test_laplas", laplasPyramInverse(laplasPyram(im1,5))[4]);
+	//  imshow("test_laplas", laplasPyramInverse(laplasPyram(im1,5))[4]);
 
 	printMinMax(im1);
 	printMinMax(im2);
@@ -244,7 +260,12 @@ int main()
 	Mat res2 = Mat((res - minB) / (maxB - minB));
 
 	imshow("res",res);
-
+	Mat saver;
+	cvtColor(res, saver, CV_8U);
+	printMinMax(saver);
+	normalize(saver,saver,0,255, NORM_MINMAX, CV_8U);
+	printMinMax(saver);
+	imwrite("../../../img/smulk1.jpg", saver);
 	waitKey();
 	system("pause");
 	return 0;
