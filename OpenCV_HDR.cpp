@@ -137,9 +137,9 @@ void printPyram(vector<Mat> mass)
 
 vector<Mat>  mixHDR(const Mat& im1, const Mat& im2, const Mat& mask)
 {
-	vector<Mat> maskMass = gaussPyram(mask,4);
-	vector<Mat> mass1    = laplasPyram(im1,4);
-	vector<Mat> mass2    = laplasPyram(im2,4);
+	vector<Mat> maskMass = gaussPyram(mask);
+	vector<Mat> mass1    = laplasPyram(im1);
+	vector<Mat> mass2    = laplasPyram(im2);
 	
 	vector<Mat> res = mixPyram(mass1, mass2, maskMass);
 
@@ -196,9 +196,32 @@ void preprocessSmith(Mat& im)
 	merge(mass, im);
 }
 
+Mat getHDRMask(Mat im1, Mat im2)
+{
+	assert(im1.rows == im2.rows);
+	assert(im1.cols == im2.cols);
+	assert(im1.channels() == im2.channels() && im2.channels() == 3);
 
+	cvtColor(im1, im1, COLOR_BGR2GRAY);
+	cvtColor(im2, im2, COLOR_BGR2GRAY);
 
-int main()
+	int porog = 128;
+
+	Mat res(im1.rows, im1.cols, CV_8U);
+	for (int y = 0; y < im1.rows; y++)
+		for (int x = 0; x < im1.cols; x++)
+		{
+			const uchar u1 = im1.at<uchar>(y, x);
+			const uchar u2 = im2.at<uchar>(y, x);
+			res.at<uchar>(y, x) = abs(u1 - porog) < abs(u2 - porog) ? 0 : 255;
+		}
+	Mat tmp;
+	vector<Mat> vec = { res,res,res };
+	merge(vec, tmp);
+	return tmp;
+}
+
+void mixSmulk()
 {
 	Mat im11 = imread("../../../img/hulk1.jpg", IMREAD_COLOR);
 	if (im11.empty())
@@ -208,11 +231,9 @@ int main()
 		cin >> c;
 		exit(0);
 	}
-	
+
 	Mat im22 = imread("../../../img/smith1.jpg", IMREAD_COLOR);
 	//preprocessSmith(im22);
-
-
 	if (im22.empty())
 	{
 		cout << "Can't read image" << endl;
@@ -248,10 +269,10 @@ int main()
 	imshow("src2", im2);
 	imshow("mask", mask);
 
-	cout<<"test "<<test_Pyram(im1)<<endl;
-	
+	cout << "test " << test_Pyram(im1) << endl;
+
 	vector<Mat>  dst = mixHDR(im1, im2, mask);
-	
+
 	printMinMax(dst[dst.size() - 1]);
 	Mat res = dst[dst.size() - 1];
 	printMinMax(res);
@@ -259,14 +280,60 @@ int main()
 	minMaxLoc(res, &minB, &maxB);
 	Mat res2 = Mat((res - minB) / (maxB - minB));
 
-	imshow("res",res);
+	imshow("res", res);
 	Mat saver;
 	cvtColor(res, saver, CV_8U);
 	printMinMax(saver);
-	normalize(saver,saver,0,255, NORM_MINMAX, CV_8U);
+	normalize(saver, saver, 0, 255, NORM_MINMAX, CV_8U);
 	printMinMax(saver);
 	imwrite("../../../img/smulk1.jpg", saver);
 	waitKey();
+}
+
+int main()
+{
+	Mat im11 = imread("../../../img/LDR_015_low.jpg", IMREAD_COLOR);
+	if (im11.empty())
+	{
+		cout << "Can't read image" << endl;
+		char c;
+		cin >> c;
+		exit(0);
+	}
+
+	Mat im22 = imread("../../../img/LDR_015_high.jpg", IMREAD_COLOR);
+	if (im22.empty())
+	{
+		cout << "Can't read image" << endl;
+		char c;
+		cin >> c;
+		exit(0);
+	}
+	
+
+	Mat mask1 = getHDRMask(im11, im22);
+
+	Mat im1 = im11;
+	Mat im2 = im22;
+	Mat mask = mask1;
+
+	im1 = toFloat(im11);
+	im2 = toFloat(im22);
+	mask = toFloat(mask1);
+
+	imshow("src1", im1);
+	imshow("src2", im2);
+	imshow("mask", mask);
+	
+	vector<Mat>  dst = mixHDR(im1, im2, mask);
+	Mat res = dst[dst.size() - 1];
+	imshow("res", res);
+	Mat saver;
+	cvtColor(res, saver, CV_8U);
+	normalize(saver, saver, 0, 255, NORM_MINMAX, CV_8U);
+	imwrite("../../../img/HDR.jpg", saver);
+	waitKey();
+
 	system("pause");
 	return 0;
 }
